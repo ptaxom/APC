@@ -6,9 +6,11 @@
 #include <ctime>
 #include <random>
 
-const int N = 256;
-const int measured_times = 1000;
-const bool debug = false;
+
+
+const int N = 8;
+const int measured_times = 1;
+const bool debug = true;
 
 using word = short;
 
@@ -21,7 +23,7 @@ void random_init_matrix(word X[N][N])
 	std::random_device rd;
 	for (int i = 0; i < N; i++)
 		for (int j = 0; j < N; j++)
-			X[i][j] = rd() % 128;
+			X[i][j] = rd() % 8;
 }
 
 
@@ -134,6 +136,80 @@ void MMX_Mult()
 		print_Matrix("MMX: ", C);
 }
 
+void AVX_Mult()
+{
+	int C[N][N];
+	{
+		int cnt, row_size = N * sizeof(word), i = 0, j = 0;
+		_asm {
+			//using eax, edi, esi, ebx
+			pusha
+			mov ecx, measured_times
+		loop_measure :
+			mov i, 0
+			mov eax, N		//eax - max_size
+			xor edi, edi	//edi - ptr for A matrix
+		loop_i :
+			xor esi, esi	//esi - ptr for B_T matrix
+			mov j, 0
+		loop_j :
+			vpxor XMM3, XMM3, XMM3
+			mov edx, N
+		loop_k :
+		
+			movdqu XMM0, A[edi]
+			movdqu XMM1, B_Transpose[esi]
+
+			vpmaddwd XMM2, XMM0, XMM1
+			vpaddd	XMM3, XMM3, XMM2
+
+			add edi, 16
+			add esi, 16
+			sub edx, 8
+			jnz loop_k
+			//end k loop
+			sub edi, row_size	//restore esi
+			//save value in C[i][j]
+
+			vphaddd XMM2, XMM3, XMM3
+				
+			vmovdqu XMM0, XMM2
+			vpsrlq XMM2, XMM2, 32
+			vpaddd XMM2, XMM2, XMM0
+			
+
+			push esi
+			push edi
+			imul edi, 2
+			
+			mov esi, j
+			imul esi, 4		//multiply on sizeof(int)
+			add esi, edi	//now esi points to C[i][j]
+			
+			movdqu C[esi], XMM2
+
+			pop edi
+			pop esi
+			//update iteratos
+			inc j
+			cmp j, eax
+			jne loop_j
+			//end j loop
+			add edi, row_size
+			inc i
+			cmp i, eax
+			jne loop_i
+
+			dec ecx
+			jnz loop_measure
+			emms
+			popa
+		}
+	}
+	if (debug)
+		print_Matrix("AVX: ", C);
+}
+
 
 void ASM_Mult() {
 	int C[N][N];
@@ -222,8 +298,9 @@ int main()
 
 	if (debug) {
 		C_Matrix_Mult();
-		MMX_Mult();
-		ASM_Mult();
+		//ASM_Mult();
+		//MMX_Mult();
+		AVX_Mult();
 	}
 	else {
 		time_measure_wrapper(&C_Matrix_Mult, "C function:   ");
