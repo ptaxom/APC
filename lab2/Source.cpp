@@ -8,9 +8,9 @@
 
 
 
-const int N = 8;
-const int measured_times = 1;
-const bool debug = true;
+const int N = 256;
+const int measured_times = 1000;
+const bool debug = false;
 
 using word = short;
 
@@ -186,7 +186,7 @@ void AVX_Mult()
 			imul esi, 4		//multiply on sizeof(int)
 			add esi, edi	//now esi points to C[i][j]
 			
-			movdqu C[esi], XMM2
+			movd C[esi], XMM2
 
 			pop edi
 			pop esi
@@ -298,14 +298,15 @@ int main()
 
 	if (debug) {
 		C_Matrix_Mult();
-		//ASM_Mult();
-		//MMX_Mult();
+		ASM_Mult();
+		MMX_Mult();
 		AVX_Mult();
 	}
 	else {
 		time_measure_wrapper(&C_Matrix_Mult, "C function:   ");
 		time_measure_wrapper(&ASM_Mult, "ASM function: ");
 		time_measure_wrapper(&MMX_Mult, "MMX function: ");
+		time_measure_wrapper(&AVX_Mult, "AVX function: ");
 	}
 
 
