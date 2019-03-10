@@ -8,7 +8,7 @@
 
 
 
-const int N = 256;
+const int N = 512-16;
 const int measured_times = 1000;
 const bool debug = false;
 
@@ -136,6 +136,7 @@ void MMX_Mult()
 		print_Matrix("MMX: ", C);
 }
 
+
 void AVX_Mult()
 {
 	int C[N][N];
@@ -208,6 +209,79 @@ void AVX_Mult()
 	}
 	if (debug)
 		print_Matrix("AVX: ", C);
+}
+
+
+void AVX2_Mult()
+{
+	int C[N][N];
+	{
+		int cnt = 0, row_size = N * sizeof(word), i = 0, j = 0;
+		_asm {
+			//using eax, edi, esi, ebx
+			pusha
+			mov ecx, measured_times
+			loop_measure :
+			mov i, 0
+			mov eax, N		//eax - max_size
+			xor edi, edi	//edi - ptr for A matrix
+		loop_i :
+			xor esi, esi	//esi - ptr for B_T matrix
+			mov j, 0
+		loop_j :
+			vpxor YMM3, YMM3, YMM3
+			mov edx, N
+		loop_k :
+
+			vmovdqu YMM0, A[edi]
+			vmovdqu YMM1, B_Transpose[esi]
+
+			vpmaddwd YMM2, YMM0, YMM1
+			vpaddd	YMM3, YMM3, YMM2
+
+			add edi, 32
+			add esi, 32
+			sub edx, 16
+			jnz loop_k
+			//end k loop
+			sub edi, row_size	//restore esi
+			//save value in C[i][j]
+
+
+			vphaddd YMM3, YMM3, YMM3
+			vperm2i128 YMM2, YMM3, YMM3, 1
+			vpaddd YMM3, YMM3, YMM2
+			vphaddd YMM3, YMM3, YMM3
+
+
+			push esi
+			push edi
+			imul edi, 2
+			mov esi, j
+			imul esi, 4		//multiply on sizeof(int)
+			add esi, edi	//now esi points to C[i][j]
+
+			movd C[esi], XMM3
+	
+			pop edi
+			pop esi
+			//update iteratos
+			inc j
+			cmp j, eax
+			jne loop_j
+			//end j loop
+			add edi, row_size
+			inc i
+			cmp i, eax
+			jne loop_i
+			dec ecx
+			jnz loop_measure
+			emms
+			popa
+		}
+	}
+	if (debug)
+		print_Matrix("AVX2: ", C);
 }
 
 
@@ -300,13 +374,16 @@ int main()
 		C_Matrix_Mult();
 		ASM_Mult();
 		MMX_Mult();
-		AVX_Mult();
+	    AVX_Mult();
+		AVX2_Mult();
 	}
 	else {
-		time_measure_wrapper(&C_Matrix_Mult, "C function:   ");
-		time_measure_wrapper(&ASM_Mult, "ASM function: ");
-		time_measure_wrapper(&MMX_Mult, "MMX function: ");
-		time_measure_wrapper(&AVX_Mult, "AVX function: ");
+    //	time_measure_wrapper(&C_Matrix_Mult,
+				//						 "   C function: ");
+  		//time_measure_wrapper(&ASM_Mult,  " ASM function: ");
+		time_measure_wrapper(&MMX_Mult,  " MMX function: ");
+		time_measure_wrapper(&AVX_Mult,  " AVX function: ");
+		time_measure_wrapper(&AVX2_Mult, "AVX2 function: ");
 	}
 
 
